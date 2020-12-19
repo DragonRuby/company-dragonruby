@@ -127,3 +127,9 @@ module GTK
     end # end Autocomplete
   end # end Runtime
 end # end GTK
+
+module GTK
+  class Runtime
+    include Autocomplete
+  end
+end
