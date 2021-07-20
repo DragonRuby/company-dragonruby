@@ -1,3 +1,7 @@
+# Copyright 2019 DragonRuby LLC
+# MIT License
+# autocomplete.rb has been released under MIT (*only this file*).
+
 module GTK
   class Runtime
     module Autocomplete
@@ -20,7 +24,7 @@ module GTK
           sub_index       = index - previous_line[:sum]
           word            = (cursor_line[:line][0..sub_index - 1]).strip
           token           = (word.split " ")[-1]
-          dots            = (token.split ".")
+          dots            = (token.split ".").flat_map { |s| s.split "[" }.flat_map { |s| s.split "]" }.flat_map { |s| s.split "(" }.flat_map { |s| s.split ")" }
           dot             = dots[-1]
         end
 
@@ -38,10 +42,13 @@ module GTK
       end
 
       def autocomplete_filter_methods keys, *ignores
-        puts keys
         ignores ||= []
         ignores   = [ignores].flatten
         keys   = keys.map { |k| k.to_s }
+        keys   = keys.reject { |k| k.include? '"' }
+                     .reject { |k| k.start_with? "'" }
+                     .reject { |k| k.include? "," }
+                     .reject { |k| k.start_with? "#" }
         others = ["def", "end"] +
                  [ :entity_keys_by_ref,
                    :entity_name,
@@ -57,13 +64,12 @@ module GTK
                    :meta!,
                    :new?,
                    :old?,
-                   :original_eq_eq, :set!,
+                   :__original_eq_eq__, :set!,
                    :update_entity_keys_by_ref,
                    :with_meta] +
                  ignores + keys.find_all { |k| k.to_s.to_i.to_s == k.to_s }
 
         final = (keys - (others.map { |m| m.to_s })).uniq
-        puts final
         final
       end
 
@@ -80,20 +86,29 @@ module GTK
 
         if word[-1] == "." && token
           lookup = {
-            'args'     => lambda { $gtk.args },
-            'inputs'   => lambda { $gtk.args.inputs },
-            'outputs'  => lambda { $gtk.args.outputs },
-            'keyboard' => lambda { $gtk.args.keyboard },
-            'key_down' => lambda { $gtk.args.keyboard.key_down },
-            'key_up'   => lambda { $gtk.args.keyboard.key_up },
-            'state'    => lambda { $gtk.args.state },
-            '$gtk'     => lambda { $gtk }
+            'args'     => lambda { $gtk.args.autocomplete_methods },
+            'inputs'   => lambda { $gtk.args.inputs.autocomplete_methods },
+            'geometry' => lambda { $gtk.args.geometry.autocomplete_methods },
+            'outputs'  => lambda { $gtk.args.outputs.autocomplete_methods },
+            'layout'   => lambda { $gtk.args.layouts.autocomplete_methods },
+            'keyboard' => lambda { $gtk.args.keyboard.autocomplete_methods },
+            'key_down' => lambda { $gtk.args.keyboard.key_down.autocomplete_methods },
+            'key_up'   => lambda { $gtk.args.keyboard.key_up.autocomplete_methods },
+            'state'    => lambda { $gtk.args.state.autocomplete_methods },
+            'fn'       => lambda { $gtk.args.fn.autocomplete_methods },
+            '$gtk'     => lambda { $gtk.autocomplete_methods },
+            'gtk'      => lambda { $gtk.autocomplete_methods },
+            'mouse'    => lambda { $gtk.args.inputs.mouse.autocomplete_methods },
+            'click'    => lambda { [:x, :y, :point] }
           }
 
           lookup_result = lookup[dot]
-          puts "lookup result was not nil"
 
-          return autocomplete_filter_methods lookup_result.call.autocomplete_methods if lookup_result
+          return autocomplete_filter_methods lookup_result.call if lookup_result
+
+          if dot[0].upcase == dot[0] && (Object.const_defined? dot.to_sym)
+            return (Object.const_get dot.to_sym).autocomplete_methods
+          end
 
           start_collecting = false
           dots_after_state = dots.find_all do |s|
@@ -110,10 +125,16 @@ module GTK
             target = target.as_hash[k.to_sym] if target.respond_to? :as_hash
           end
 
-          return autocomplete_filter_methods target.as_hash.keys
+          if target.respond_to? :as_hash
+            return autocomplete_filter_methods target.as_hash.keys
+          else
+            return autocomplete_filter_methods target.autocomplete_methods
+          end
         end
 
 
+        text = text.each_line.reject { |l| l.strip.start_with? "#" }.join "\n"
+        text = text.each_line.map { |l| l.split("#").first }.join "\n"
         text.gsub!("[", " ")
         text.gsub!("]", " ")
         text.gsub!("(", " ")
@@ -127,9 +148,3 @@ module GTK
     end # end Autocomplete
   end # end Runtime
 end # end GTK
-
-module GTK
-  class Runtime
-    include Autocomplete
-  end
-end
