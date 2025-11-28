@@ -5,9 +5,6 @@
 
 ;; browse-url-url-encode-chars
 (setq company-backends (delete 'company-dragonruby company-backends))
-(setq company-backends (delete 'company-dragonruby company-backends))
-(setq company-backends (delete 'company-dragonruby company-backends))
-(setq company-backends (delete 'company-dragonruby company-backends))
 
 (defun company-dragonruby--buffer-text (buffer)
   (with-current-buffer buffer
